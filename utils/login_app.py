@@ -1,6 +1,13 @@
+# ...existing code...
 import tkinter as tk
 from tkinter import messagebox
 import hashlib
+import json
+import os
+import re
+# from utils.saveJson import guardar_diccionario, cargar_diccionario
+# from utils import secureAES as AES
+#tengo hambre
 
 class LoginApp:
     def __init__(self, root):
@@ -9,16 +16,42 @@ class LoginApp:
         self.root.geometry("400x300")
         self.root.configure(bg='#f0f0f0')
         
+        # Ruta del archivo JSON (misma carpeta que este script)
+        self.db_path = os.path.join(os.path.dirname(__file__), "users-db.json")
+        
         # Base de datos simulada (usuario: contraseña_hasheada)
+        # Se cargará desde users-db.json si existe
         self.users = {
-            'admin': 'pass-hash'
+            'admin': self.hash_password('admin')  # contraseña por defecto 'admin'
         }
+        self.load_users()
         
         self.create_widgets()
     
     def hash_password(self, password):
         """Hashea la contraseña usando SHA-256"""
-        return 'pass-hash'
+        return hashlib.sha256(password.encode('utf-8')).hexdigest()
+    
+    def load_users(self):
+        """Carga usuarios desde users-db.json (si existe)."""
+        try:
+            if os.path.exists(self.db_path):
+                with open(self.db_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    if isinstance(data, dict):
+                        # actualizar/reescribir usuarios cargados
+                        self.users.update(data)
+        except Exception as e:
+            # No detener la app por un JSON corrupto; mostrar error opcional
+            print(f"[load_users] error: {e}")
+    
+    def save_users(self):
+        """Guarda el diccionario self.users en users-db.json"""
+        try:
+            with open(self.db_path, 'w', encoding='utf-8') as f:
+                json.dump(self.users, f, indent=4, ensure_ascii=False)
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo guardar el usuario: {e}")
     
     def create_widgets(self):
         # Frame principal
@@ -121,11 +154,49 @@ class LoginApp:
         # Información de usuarios demo
         info_frame = tk.Frame(main_frame, bg='#f0f0f0')
         info_frame.pack(pady=20)
+
         
+
 
         
     def signin(self):
-        return print("usuario registrado")
+        """Registra un nuevo usuario y lo guarda en users-db.json"""
+        username = self.user_entry.get().strip()
+        password = self.pass_entry.get().strip()
+        if not username or not password:
+            messagebox.showerror("Error", "Por favor, complete todos los campos")
+            return
+
+        # Validación de requisitos de contraseña
+        missing = self.validarContrasena(password)
+        if missing:
+            # Construir mensaje claro sobre lo que falta
+            if len(missing) == 1:
+                msg = f"La contraseña debe contener {missing[0]}."
+            else:
+                msg = "La contraseña debe contener al menos: " + ", ".join(missing[:-1]) + " y " + missing[-1] + "."
+            messagebox.showerror("Contraseña inválida", msg)
+            return
+
+        if username in self.users:
+            messagebox.showerror("Error", "El usuario ya existe")
+            return
+        hashed = self.hash_password(password)
+        self.users[username] = hashed
+        self.save_users()
+        messagebox.showinfo("Registrado", f"Usuario '{username}' registrado correctamente")
+        self.clear_fields()
+
+
+    def validarContrasena(self, password):
+        missing = []
+        if not re.search(r'[A-Z]', password):
+            missing.append("Tu contrasena debe contener al menos una letra mayúscula")
+        if not re.search(r'\d', password):
+            missing.append("tu contrasena debe contener al menos un número")
+        if not re.search(r'[!@#$%^&*()_+\-=\[\]{};:"\\|,.<>\/?¿¡~`]', password):
+            missing.append("tu contrasena debe contener por lo menos un carácter especial")
+        return missing
     
     def login(self):
         """Verifica las credenciales del usuario"""
@@ -137,7 +208,6 @@ class LoginApp:
             return
         
         # Verificar usuario y contraseña
-        # userJson = getUsersDB
         if username in self.users:
             hashed_password = self.hash_password(password)
             if self.users[username] == hashed_password:
@@ -199,7 +269,7 @@ def main():
     screen_height = root.winfo_screenheight()
     x = (screen_width - window_width) // 2
     y = (screen_height - window_height) // 2
-    
+    root.geometry(f'{window_width}x{window_height}+{x}+{y}')
     
     # Iniciar aplicación
     app = LoginApp(root)
